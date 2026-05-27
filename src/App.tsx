@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 
 const EMAILJS_SERVICE_ID = "service_surimpt";
 const EMAILJS_TEMPLATE_ID = "template_0c3vcel";
 const EMAILJS_PUBLIC_KEY = "0QTpdeFpOeU3lNEDm";
+
+const SUPABASE_URL = "https://fnhmcvvgxzqeudqmglmi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_PwZtviuYsI1RX8KxZ7AUbA_iGtHnogn";
 
 const services = [
   { id: "basico", name: "Lavado Básico", price: 199, duration: "45 min", icon: "💧", desc: "Exterior completo + secado", color: "#00C9FF" },
@@ -11,7 +14,7 @@ const services = [
   { id: "premium", name: "Detailing Premium", price: 699, duration: "3 hrs", icon: "🏆", desc: "Pulido + encerado + ozono", color: "#F59E0B" },
 ];
 
-const timeSlots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00"];
+const ALL_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00"];
 
 const vehicleTypes = [
   { id: "sedan", label: "Sedán", icon: "🚗" },
@@ -30,6 +33,29 @@ function getDaysFromToday(n: number) {
     days.push({ label: names[d.getDay()], day: d.getDate(), month: months[d.getMonth()], full: d.toISOString().split("T")[0] });
   }
   return days;
+}
+
+async function getReservedSlots(date: string): Promise<string[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/reservas?fecha=eq.${date}&select=hora`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.map((r: { hora: string }) => r.hora.slice(0, 5));
+}
+
+async function saveReserva(data: Record<string, string>) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/reservas`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=minimal"
+    },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error("Supabase error");
 }
 
 async function sendEmail(templateParams: Record<string, string>) {
@@ -58,9 +84,22 @@ export default function App() {
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [emailError, setEmailError] = useState(false);
+  const [reservedSlots, setReservedSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const days = getDaysFromToday(10);
   const update = (key: keyof FormState, val: string) => setForm(f => ({ ...f, [key]: val }));
+
+  useEffect(() => {
+    if (form.date) {
+      setLoadingSlots(true);
+      setForm(f => ({ ...f, time: null }));
+      getReservedSlots(form.date).then(slots => {
+        setReservedSlots(slots);
+        setLoadingSlots(false);
+      });
+    }
+  }, [form.date]);
 
   const canNext = () => {
     if (step === 1) return form.service && form.vehicle;
@@ -76,6 +115,16 @@ export default function App() {
     setSending(true);
     setEmailError(false);
     try {
+      await saveReserva({
+        fecha: form.date!,
+        hora: form.time! + ":00",
+        servicio: selectedService?.name ?? "",
+        vehiculo: selectedVehicle?.label ?? "",
+        cliente_nombre: form.name,
+        cliente_telefono: form.phone,
+        cliente_direccion: form.address,
+        notas: form.notes || "",
+      });
       await sendEmail({
         cliente_nombre: form.name,
         cliente_telefono: form.phone,
@@ -98,6 +147,7 @@ export default function App() {
   const resetApp = () => {
     setSubmitted(false);
     setStep(1);
+    setReservedSlots([]);
     setForm({ service: null, vehicle: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
   };
 
@@ -118,7 +168,7 @@ export default function App() {
             <div style={s.confirmRow}><span style={s.confirmLabel}>Dirección</span><span style={s.confirmVal}>{form.address}</span></div>
             <div style={s.confirmRow}><span style={s.confirmLabel}>Total</span><span style={{...s.confirmVal, color:"#00C9FF", fontWeight:700}}>${selectedService?.price} MXN</span></div>
           </div>
-          <p style={s.successNote}>📧 Los detalles fueron enviados a <b>rianorussi@gmail.com</b></p>
+          <p style={s.successNote}>📧 Reserva enviada a <b>rianorussi@gmail.com</b></p>
           <button style={s.resetBtn} onClick={resetApp}>Nueva Reserva</button>
         </div>
       </div>
@@ -197,14 +247,27 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <h2 style={{...s.sectionTitle, marginTop:28}}>Elige hora</h2>
+            <h2 style={{...s.sectionTitle, marginTop:28}}>
+              Elige hora {loadingSlots && <span style={{fontSize:13, color:"#64748b", fontWeight:400}}>cargando...</span>}
+            </h2>
             <div style={s.timeGrid}>
-              {timeSlots.map(t => (
-                <div key={t} onClick={() => update("time", t)}
-                  style={{...s.timeChip, background: form.time===t ? "#00C9FF" : "#0a1628", color: form.time===t ? "#030d1a" : "#94a3b8", border: form.time===t ? "2px solid #00C9FF" : "2px solid #1e2a3a", fontWeight: form.time===t ? 700 : 400}}>
-                  {t}
-                </div>
-              ))}
+              {ALL_SLOTS.map(t => {
+                const occupied = reservedSlots.includes(t);
+                return (
+                  <div key={t} onClick={() => !occupied && update("time", t)}
+                    style={{...s.timeChip,
+                      background: occupied ? "#0a0f1a" : form.time===t ? "#00C9FF" : "#0a1628",
+                      color: occupied ? "#1e2a3a" : form.time===t ? "#030d1a" : "#94a3b8",
+                      border: occupied ? "2px solid #0d1520" : form.time===t ? "2px solid #00C9FF" : "2px solid #1e2a3a",
+                      fontWeight: form.time===t ? 700 : 400,
+                      cursor: occupied ? "not-allowed" : "pointer",
+                      textDecoration: occupied ? "line-through" : "none",
+                    }}>
+                    {t}
+                    {occupied && <div style={{fontSize:9, color:"#1e3a2a", marginTop:2}}>Ocupado</div>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -234,7 +297,7 @@ export default function App() {
               <div style={s.summaryRow}><span>{selectedVehicle?.icon} {selectedVehicle?.label}</span></div>
               <div style={s.summaryRow}><span>📅 {form.date} · {form.time}</span></div>
             </div>
-            {emailError && <div style={s.errorBox}>⚠️ No se pudo enviar el correo. Intenta de nuevo.</div>}
+            {emailError && <div style={s.errorBox}>⚠️ No se pudo confirmar la reserva. Intenta de nuevo.</div>}
           </div>
         )}
 
@@ -287,7 +350,7 @@ const styles: Record<string, CSSProperties> = {
   dayNum: { fontSize:20, fontWeight:800, lineHeight:1 },
   dayMonth: { fontSize:11, color:"#4a5568", marginTop:4 },
   timeGrid: { display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10 },
-  timeChip: { borderRadius:12, padding:"12px 6px", textAlign:"center", cursor:"pointer", fontSize:14 },
+  timeChip: { borderRadius:12, padding:"12px 6px", textAlign:"center", fontSize:14, transition:"all 0.15s" },
   formGroup: { marginBottom:16 },
   label: { display:"block", fontSize:13, color:"#64748b", fontWeight:600, marginBottom:6 },
   input: { width:"100%", background:"#0a1628", border:"1.5px solid #1e2a3a", borderRadius:12, padding:"13px 14px", color:"#e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" },
