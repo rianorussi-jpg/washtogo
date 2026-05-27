@@ -9,18 +9,41 @@ const SUPABASE_URL = "https://fnhmcvvgxzqeudqmglmi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_PwZtviuYsI1RX8KxZ7AUbA_iGtHnogn";
 
 const services = [
-  { id: "basico", name: "Lavado Básico", price: 199, duration: "45 min", icon: "💧", desc: "Exterior completo + secado", color: "#00C9FF" },
-  { id: "completo", name: "Lavado Completo", price: 349, duration: "90 min", icon: "✨", desc: "Exterior + interior + aspirado", color: "#A78BFA", popular: true },
-  { id: "premium", name: "Detailing Premium", price: 699, duration: "3 hrs", icon: "🏆", desc: "Pulido + encerado + ozono", color: "#F59E0B" },
+  {
+    id: "basico",
+    name: "Lavado Básico",
+    icon: "💧",
+    desc: "Exterior completo + aspirado interior",
+    color: "#00C9FF",
+    prices: { coche: 199, camioneta: 249 },
+  },
+  {
+    id: "intermedio",
+    name: "Lavado Intermedio",
+    icon: "✨",
+    desc: "Exterior + aspirado + cera interior y exterior",
+    color: "#A78BFA",
+    popular: true,
+    prices: { coche: 299, camioneta: 349 },
+  },
+  {
+    id: "brilloso",
+    name: "Lavado Brilloso",
+    icon: "🏆",
+    desc: "Exterior + aspirado + cera + abrillantador en rines y plásticos",
+    color: "#F59E0B",
+    prices: { coche: 449, camioneta: 499 },
+  },
 ];
 
-const ALL_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00"];
+const ALL_SLOTS = ["09:00","10:00","11:00","12:00","14:00","15:00","16:00","17:00"];
 
 const vehicleTypes = [
-  { id: "sedan", label: "Sedán", icon: "🚗" },
-  { id: "suv", label: "SUV / Pick-up", icon: "🚙" },
-  { id: "moto", label: "Moto", icon: "🏍️" },
+  { id: "coche", label: "Coche", icon: "🚗" },
+  { id: "camioneta", label: "Camioneta", icon: "🚙" },
 ];
+
+type VehicleId = "coche" | "camioneta";
 
 function getDaysFromToday(n: number) {
   const days = [];
@@ -68,8 +91,8 @@ async function sendEmail(templateParams: Record<string, string>) {
 }
 
 interface FormState {
-  service: string | null;
   vehicle: string | null;
+  service: string | null;
   date: string | null;
   time: string | null;
   name: string;
@@ -80,7 +103,7 @@ interface FormState {
 
 export default function App() {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>({ service: null, vehicle: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
+  const [form, setForm] = useState<FormState>({ vehicle: null, service: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [emailError, setEmailError] = useState(false);
@@ -102,7 +125,7 @@ export default function App() {
   }, [form.date]);
 
   const canNext = () => {
-    if (step === 1) return form.service && form.vehicle;
+    if (step === 1) return form.vehicle && form.service;
     if (step === 2) return form.date && form.time;
     if (step === 3) return form.name.trim() && form.phone.trim() && form.address.trim();
     return true;
@@ -110,6 +133,9 @@ export default function App() {
 
   const selectedService = services.find(s => s.id === form.service);
   const selectedVehicle = vehicleTypes.find(v => v.id === form.vehicle);
+  const currentPrice = selectedService && form.vehicle
+    ? selectedService.prices[form.vehicle as VehicleId]
+    : null;
 
   const handleSubmit = async () => {
     setSending(true);
@@ -133,7 +159,7 @@ export default function App() {
         vehiculo: selectedVehicle?.label ?? "",
         fecha: form.date ?? "",
         hora: form.time ?? "",
-        total: `$${selectedService?.price} MXN`,
+        total: `$${currentPrice} MXN`,
         notas: form.notes || "Sin notas",
       });
       setSubmitted(true);
@@ -148,7 +174,7 @@ export default function App() {
     setSubmitted(false);
     setStep(1);
     setReservedSlots([]);
-    setForm({ service: null, vehicle: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
+    setForm({ vehicle: null, service: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
   };
 
   const s = styles;
@@ -166,7 +192,7 @@ export default function App() {
             <div style={s.confirmRow}><span style={s.confirmLabel}>Fecha</span><span style={s.confirmVal}>{form.date}</span></div>
             <div style={s.confirmRow}><span style={s.confirmLabel}>Hora</span><span style={s.confirmVal}>{form.time}</span></div>
             <div style={s.confirmRow}><span style={s.confirmLabel}>Dirección</span><span style={s.confirmVal}>{form.address}</span></div>
-            <div style={s.confirmRow}><span style={s.confirmLabel}>Total</span><span style={{...s.confirmVal, color:"#00C9FF", fontWeight:700}}>${selectedService?.price} MXN</span></div>
+            <div style={s.confirmRow}><span style={s.confirmLabel}>Total</span><span style={{...s.confirmVal, color:"#00C9FF", fontWeight:700}}>${currentPrice} MXN</span></div>
           </div>
           <p style={s.successNote}>📧 Reserva enviada a <b>rianorussi@gmail.com</b></p>
           <button style={s.resetBtn} onClick={resetApp}>Nueva Reserva</button>
@@ -188,6 +214,11 @@ export default function App() {
         <div style={s.badge}>⚡ Disponible hoy</div>
       </header>
 
+      <div style={s.zonesBanner}>
+        <span style={s.zonesIcon}>📍</span>
+        <span style={s.zonesText}>Zonas de servicio: <b>Zakia · Zibatá · Refugio · La Pradera</b></span>
+      </div>
+
       <div style={s.progressWrap}>
         {[1,2,3].map(n => (
           <div key={n} style={s.progressItem}>
@@ -203,37 +234,52 @@ export default function App() {
       </div>
 
       <div style={s.content}>
+
+        {/* STEP 1 — Vehículo primero, luego servicios con precios dinámicos */}
         {step === 1 && (
           <div>
-            <h2 style={s.sectionTitle}>Elige tu servicio</h2>
-            <div style={s.serviceGrid}>
-              {services.map(sv => (
-                <div key={sv.id} onClick={() => update("service", sv.id)}
-                  style={{...s.serviceCard, border: form.service===sv.id ? `2px solid ${sv.color}` : "2px solid #1e2a3a", boxShadow: form.service===sv.id ? `0 0 20px ${sv.color}40` : "none"}}>
-                  {sv.popular && <div style={s.popularTag}>⭐ Más popular</div>}
-                  <div style={{fontSize:36}}>{sv.icon}</div>
-                  <div style={s.serviceName}>{sv.name}</div>
-                  <div style={s.serviceDesc}>{sv.desc}</div>
-                  <div style={s.serviceMeta}>
-                    <span style={s.serviceDuration}>⏱ {sv.duration}</span>
-                    <span style={{...s.servicePrice, color: sv.color}}>${sv.price}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <h2 style={{...s.sectionTitle, marginTop:28}}>Tipo de vehículo</h2>
+            <h2 style={s.sectionTitle}>¿Qué tipo de vehículo tienes?</h2>
             <div style={s.vehicleRow}>
               {vehicleTypes.map(v => (
-                <div key={v.id} onClick={() => update("vehicle", v.id)}
-                  style={{...s.vehicleCard, border: form.vehicle===v.id ? "2px solid #00C9FF" : "2px solid #1e2a3a", background: form.vehicle===v.id ? "#0d2035" : "#0a1628"}}>
-                  <div style={{fontSize:28}}>{v.icon}</div>
+                <div key={v.id} onClick={() => { update("vehicle", v.id); setForm(f => ({...f, vehicle: v.id, service: null})); }}
+                  style={{...s.vehicleCard, border: form.vehicle===v.id ? "2px solid #00C9FF" : "2px solid #1e2a3a", background: form.vehicle===v.id ? "#0d2035" : "#0a1628", boxShadow: form.vehicle===v.id ? "0 0 16px #00C9FF30" : "none"}}>
+                  <div style={{fontSize:32}}>{v.icon}</div>
                   <div style={s.vehicleLabel}>{v.label}</div>
                 </div>
               ))}
             </div>
+
+            {form.vehicle && (
+              <>
+                <h2 style={{...s.sectionTitle, marginTop:28}}>Elige tu servicio</h2>
+                <div style={s.serviceGrid}>
+                  {services.map(sv => {
+                    const price = sv.prices[form.vehicle as VehicleId];
+                    return (
+                      <div key={sv.id} onClick={() => update("service", sv.id)}
+                        style={{...s.serviceCard, border: form.service===sv.id ? `2px solid ${sv.color}` : "2px solid #1e2a3a", boxShadow: form.service===sv.id ? `0 0 20px ${sv.color}40` : "none"}}>
+                        {sv.popular && <div style={s.popularTag}>⭐ Más popular</div>}
+                        <div style={{fontSize:36}}>{sv.icon}</div>
+                        <div style={s.serviceName}>{sv.name}</div>
+                        <div style={s.serviceDesc}>{sv.desc}</div>
+                        <div style={s.serviceMeta}>
+                          <span style={s.serviceDuration}>{selectedVehicle?.icon} {selectedVehicle?.label}</span>
+                          <span style={{...s.servicePrice, color: sv.color}}>${price}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {!form.vehicle && (
+              <div style={s.hintBox}>👆 Selecciona tu vehículo para ver los precios</div>
+            )}
           </div>
         )}
 
+        {/* STEP 2 */}
         {step === 2 && (
           <div>
             <h2 style={s.sectionTitle}>Selecciona fecha</h2>
@@ -264,7 +310,7 @@ export default function App() {
                       textDecoration: occupied ? "line-through" : "none",
                     }}>
                     {t}
-                    {occupied && <div style={{fontSize:9, color:"#1e3a2a", marginTop:2}}>Ocupado</div>}
+                    {occupied && <div style={{fontSize:9, color:"#2a3a2a", marginTop:2}}>Ocupado</div>}
                   </div>
                 );
               })}
@@ -272,6 +318,7 @@ export default function App() {
           </div>
         )}
 
+        {/* STEP 3 */}
         {step === 3 && (
           <div>
             <h2 style={s.sectionTitle}>Tus datos</h2>
@@ -293,7 +340,7 @@ export default function App() {
             </div>
             <div style={s.summaryBox}>
               <div style={s.summaryTitle}>Resumen de tu reserva</div>
-              <div style={s.summaryRow}><span>🔧 {selectedService?.name}</span><span style={{color:"#00C9FF"}}>${selectedService?.price} MXN</span></div>
+              <div style={s.summaryRow}><span>🔧 {selectedService?.name}</span><span style={{color:"#00C9FF"}}>${currentPrice} MXN</span></div>
               <div style={s.summaryRow}><span>{selectedVehicle?.icon} {selectedVehicle?.label}</span></div>
               <div style={s.summaryRow}><span>📅 {form.date} · {form.time}</span></div>
             </div>
@@ -308,7 +355,7 @@ export default function App() {
               Continuar →
             </button>
           ) : (
-            <button style={{...s.nextBtn, background:"linear-gradient(90deg,#00C9FF,#8B5CF6)", opacity: (canNext()&&!sending)?1:0.5, cursor:(canNext()&&!sending)?"pointer":"not-allowed"}} onClick={() => canNext() && !sending && handleSubmit()}>
+            <button style={{...s.nextBtn, background:"linear-gradient(90deg,#00C9FF,#8B5CF6)", opacity:(canNext()&&!sending)?1:0.5, cursor:(canNext()&&!sending)?"pointer":"not-allowed"}} onClick={() => canNext() && !sending && handleSubmit()}>
               {sending ? "Enviando..." : "Confirmar Reserva ✓"}
             </button>
           )}
@@ -326,6 +373,9 @@ const styles: Record<string, CSSProperties> = {
   logoName: { fontSize:20, fontWeight:800, color:"#fff", letterSpacing:-0.5 },
   logoSub: { fontSize:12, color:"#4a90b8", marginTop:1 },
   badge: { background:"#0a2a10", color:"#4ade80", border:"1px solid #16a34a", borderRadius:20, padding:"4px 12px", fontSize:12, fontWeight:600 },
+  zonesBanner: { display:"flex", alignItems:"center", gap:8, background:"#0a1628", borderBottom:"1px solid #0d2035", padding:"10px 20px" },
+  zonesIcon: { fontSize:14 },
+  zonesText: { fontSize:12, color:"#64748b" },
   progressWrap: { display:"flex", alignItems:"center", justifyContent:"center", padding:"20px 20px 8px" },
   progressItem: { display:"flex", alignItems:"center", gap:8 },
   progressDot: { width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:"#fff" },
@@ -333,17 +383,18 @@ const styles: Record<string, CSSProperties> = {
   progressLine: { width:40, height:2, margin:"0 8px" },
   content: { padding:"20px 20px 0" },
   sectionTitle: { fontSize:17, fontWeight:700, color:"#fff", marginBottom:14, marginTop:0 },
+  vehicleRow: { display:"flex", gap:10 },
+  vehicleCard: { flex:1, borderRadius:14, padding:"16px 8px", textAlign:"center", cursor:"pointer", transition:"all 0.2s" },
+  vehicleLabel: { fontSize:13, color:"#94a3b8", marginTop:8, fontWeight:600 },
+  hintBox: { marginTop:24, background:"#0a1628", border:"1.5px dashed #1e2a3a", borderRadius:14, padding:"20px", textAlign:"center", color:"#4a5568", fontSize:14 },
   serviceGrid: { display:"flex", flexDirection:"column", gap:12 },
-  serviceCard: { background:"#0a1628", borderRadius:16, padding:"16px 18px", cursor:"pointer", position:"relative", overflow:"hidden" },
+  serviceCard: { background:"#0a1628", borderRadius:16, padding:"16px 18px", cursor:"pointer", position:"relative", overflow:"hidden", transition:"all 0.2s" },
   popularTag: { position:"absolute", top:10, right:10, background:"#7c3aed", color:"#fff", borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:600 },
   serviceName: { fontSize:16, fontWeight:700, color:"#fff", marginTop:8, marginBottom:4 },
   serviceDesc: { fontSize:13, color:"#64748b", marginBottom:10 },
   serviceMeta: { display:"flex", justifyContent:"space-between", alignItems:"center" },
   serviceDuration: { fontSize:12, color:"#4a5568" },
-  servicePrice: { fontSize:20, fontWeight:800 },
-  vehicleRow: { display:"flex", gap:10 },
-  vehicleCard: { flex:1, borderRadius:14, padding:"14px 8px", textAlign:"center", cursor:"pointer" },
-  vehicleLabel: { fontSize:12, color:"#94a3b8", marginTop:6, fontWeight:600 },
+  servicePrice: { fontSize:22, fontWeight:800 },
   daysScroll: { display:"flex", gap:10, overflowX:"auto", paddingBottom:8 },
   dayCard: { minWidth:58, borderRadius:14, padding:"10px 8px", textAlign:"center", cursor:"pointer", flexShrink:0 },
   dayName: { fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 },
