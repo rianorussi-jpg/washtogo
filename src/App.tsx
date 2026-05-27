@@ -81,6 +81,17 @@ async function saveReserva(data: Record<string, string>) {
   if (!res.ok) throw new Error("Supabase error");
 }
 
+const TELEGRAM_TOKEN = "8915539178:AAHaU9yS_cH-6kP7RAmV5YaVzy1ONsurxVo";
+const TELEGRAM_CHAT_ID = "7681123167";
+
+async function sendTelegram(msg: string) {
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg, parse_mode: "HTML" }),
+  });
+}
+
 async function sendEmail(templateParams: Record<string, string>) {
   const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
     method: "POST",
@@ -162,6 +173,19 @@ export default function App() {
         total: `$${currentPrice} MXN`,
         notas: form.notes || "Sin notas",
       });
+      await sendTelegram(
+`🚿 <b>Nueva Reserva WashToGo</b>
+
+👤 <b>Cliente:</b> ${form.name}
+📱 <b>Teléfono:</b> ${form.phone}
+📍 <b>Dirección:</b> ${form.address}
+🔧 <b>Servicio:</b> ${selectedService?.name}
+🚗 <b>Vehículo:</b> ${selectedVehicle?.label}
+📅 <b>Fecha:</b> ${form.date}
+⏰ <b>Hora:</b> ${form.time}
+💰 <b>Total:</b> $${currentPrice} MXN
+📝 <b>Notas:</b> ${form.notes || "Sin notas"}`
+      );
       setSubmitted(true);
     } catch {
       setEmailError(true);
