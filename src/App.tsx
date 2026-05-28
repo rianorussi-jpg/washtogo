@@ -81,6 +81,31 @@ async function saveReserva(data: Record<string, string>) {
   if (!res.ok) throw new Error("Supabase error");
 }
 
+function getNextNWeekdayDates(dayOfWeek: number, count: number, startDate: Date = new Date()): string[] {
+  const dates: string[] = [];
+  let current = new Date(startDate);
+  
+  while (dates.length < count) {
+    if (current.getDay() === dayOfWeek) {
+      dates.push(current.toISOString().split("T")[0]);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return dates;
+}
+
+async function saveRecurringReservas(baseData: Record<string, string>, dayOfWeek: number) {
+  const dates = getNextNWeekdayDates(dayOfWeek, 13); // 3 meses ≈ 13 semanas
+  
+  for (const date of dates) {
+    await saveReserva({
+      ...baseData,
+      fecha: date,
+    });
+  }
+}
+
 const TELEGRAM_TOKEN = "8915539178:AAHaU9yS_cH-6kP7RAmV5YaVzy1ONsurxVo";
 const TELEGRAM_CHAT_ID = "7681123167";
 
@@ -110,11 +135,12 @@ interface FormState {
   phone: string;
   address: string;
   notes: string;
+  recurring: boolean;
 }
 
 export default function App() {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>({ vehicle: null, service: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
+  const [form, setForm] = useState<FormState>({ vehicle: null, service: null, date: null, time: null, name: "", phone: "", address: "", notes: "", recurring: false });
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [emailError, setEmailError] = useState(false);
@@ -152,8 +178,7 @@ export default function App() {
     setSending(true);
     setEmailError(false);
     try {
-      await saveReserva({
-        fecha: form.date!,
+      const baseData = {
         hora: form.time! + ":00",
         servicio: selectedService?.name ?? "",
         vehiculo: selectedVehicle?.label ?? "",
@@ -161,7 +186,20 @@ export default function App() {
         cliente_telefono: form.phone,
         cliente_direccion: form.address,
         notas: form.notes || "",
-      });
+      };
+
+      if (form.recurring && form.date) {
+        // Get day of week from selected date
+        const dateObj = new Date(form.date + "T00:00:00");
+        const dayOfWeek = dateObj.getDay();
+        await saveRecurringReservas(baseData, dayOfWeek);
+      } else {
+        await saveReserva({
+          ...baseData,
+          fecha: form.date!,
+        });
+      }
+
       await sendEmail({
         cliente_nombre: form.name,
         cliente_telefono: form.phone,
@@ -171,19 +209,21 @@ export default function App() {
         fecha: form.date ?? "",
         hora: form.time ?? "",
         total: `$${currentPrice} MXN`,
-        notas: form.notes || "Sin notas",
+        notas: form.recurring ? `${form.notes || ""} (Recurrente: cada ${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][new Date(form.date! + "T00:00:00").getDay()]} a las ${form.time})` : form.notes || "Sin notas",
       });
+      
       await sendTelegram(
-`🚿 <b>Nueva Reserva WashToGo</b>
+`🚿 <b>Nueva Reserva WashToGo${form.recurring ? " - RECURRENTE" : ""}</b>
 
 👤 <b>Cliente:</b> ${form.name}
 📱 <b>Teléfono:</b> ${form.phone}
 📍 <b>Dirección:</b> ${form.address}
 🔧 <b>Servicio:</b> ${selectedService?.name}
 🚗 <b>Vehículo:</b> ${selectedVehicle?.label}
-📅 <b>Fecha:</b> ${form.date}
+📅 <b>Fecha Inicial:</b> ${form.date}
 ⏰ <b>Hora:</b> ${form.time}
 💰 <b>Total:</b> $${currentPrice} MXN
+${form.recurring ? `📌 <b>Frecuencia:</b> Cada ${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][new Date(form.date! + "T00:00:00").getDay()]} por 3 meses` : ""}
 📝 <b>Notas:</b> ${form.notes || "Sin notas"}`
       );
       setSubmitted(true);
@@ -198,7 +238,7 @@ export default function App() {
     setSubmitted(false);
     setStep(1);
     setReservedSlots([]);
-    setForm({ vehicle: null, service: null, date: null, time: null, name: "", phone: "", address: "", notes: "" });
+    setForm({ vehicle: null, service: null, date: null, time: null, name: "", phone: "", address: "", notes: "", recurring: false });
   };
 
   const s = styles;
@@ -339,6 +379,21 @@ export default function App() {
                 );
               })}
             </div>
+
+            {form.date && form.time && (
+              <div style={s.recurringBox}>
+                <label style={s.recurringLabel}>
+                  <input
+                    type="checkbox"
+                    checked={form.recurring}
+                    onChange={e => setForm(f => ({...f, recurring: e.target.checked}))}
+                    style={{marginRight:8, width:18, height:18, cursor:"pointer"}}
+                  />
+                  <span>🔄 Agendar todos los {["domingos","lunes","martes","miércoles","jueves","viernes","sábados"][new Date(form.date + "T00:00:00").getDay()]} a las {form.time} durante 3 meses</span>
+                </label>
+                <p style={s.recurringHint}>Si no marcas, solo se agendará esta fecha</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -426,6 +481,9 @@ const styles: Record<string, CSSProperties> = {
   dayMonth: { fontSize:11, color:"#4a5568", marginTop:4 },
   timeGrid: { display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10 },
   timeChip: { borderRadius:12, padding:"12px 6px", textAlign:"center", fontSize:14, transition:"all 0.15s" },
+  recurringBox: { marginTop:20, background:"#0a1628", border:"1.5px solid #1e2a3a", borderRadius:14, padding:"16px 16px" },
+  recurringLabel: { display:"flex", alignItems:"center", cursor:"pointer", fontSize:14, color:"#e2e8f0", fontWeight:500 },
+  recurringHint: { fontSize:12, color:"#4a5568", marginTop:8, marginBottom:0 },
   formGroup: { marginBottom:16 },
   label: { display:"block", fontSize:13, color:"#64748b", fontWeight:600, marginBottom:6 },
   input: { width:"100%", background:"#0a1628", border:"1.5px solid #1e2a3a", borderRadius:12, padding:"13px 14px", color:"#e2e8f0", fontSize:15, outline:"none", boxSizing:"border-box" },
