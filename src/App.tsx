@@ -363,18 +363,26 @@ ${form.recurring ? `📌 <b>Frecuencia:</b> Cada ${["domingo","lunes","martes","
             <div style={s.timeGrid}>
               {ALL_SLOTS.map(t => {
                 const occupied = reservedSlots.includes(t);
+                const today = new Date().toISOString().split("T")[0];
+                const isToday = form.date === today;
+                const currentHour = new Date().getHours();
+                const slotHour = parseInt(t.split(":")[0]);
+                const isTooSoon = isToday && slotHour <= currentHour;
+                const isDisabled = occupied || isTooSoon;
+
                 return (
-                  <div key={t} onClick={() => !occupied && update("time", t)}
+                  <div key={t} onClick={() => !isDisabled && update("time", t)}
                     style={{...s.timeChip,
-                      background: occupied ? "#0a0f1a" : form.time===t ? "#00C9FF" : "#0a1628",
-                      color: occupied ? "#1e2a3a" : form.time===t ? "#030d1a" : "#94a3b8",
-                      border: occupied ? "2px solid #0d1520" : form.time===t ? "2px solid #00C9FF" : "2px solid #1e2a3a",
+                      background: isDisabled ? "#0a0f1a" : form.time===t ? "#00C9FF" : "#0a1628",
+                      color: isDisabled ? "#1e2a3a" : form.time===t ? "#030d1a" : "#94a3b8",
+                      border: isDisabled ? "2px solid #0d1520" : form.time===t ? "2px solid #00C9FF" : "2px solid #1e2a3a",
                       fontWeight: form.time===t ? 700 : 400,
-                      cursor: occupied ? "not-allowed" : "pointer",
-                      textDecoration: occupied ? "line-through" : "none",
+                      cursor: isDisabled ? "not-allowed" : "pointer",
+                      textDecoration: isDisabled ? "line-through" : "none",
                     }}>
                     {t}
                     {occupied && <div style={{fontSize:9, color:"#2a3a2a", marginTop:2}}>Ocupado</div>}
+                    {isTooSoon && !occupied && <div style={{fontSize:9, color:"#2a3a2a", marginTop:2}}>Muy pronto</div>}
                   </div>
                 );
               })}
