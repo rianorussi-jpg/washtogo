@@ -96,7 +96,7 @@ function getNextNWeekdayDates(dayOfWeek: number, count: number, startDate: Date 
 }
 
 async function saveRecurringReservas(baseData: Record<string, string>, dayOfWeek: number) {
-  const dates = getNextNWeekdayDates(dayOfWeek, 13); // 3 meses ≈ 13 semanas
+  const dates = getNextNWeekdayDates(dayOfWeek, 52); // 1 año indefinidamente
   
   for (const date of dates) {
     await saveReserva({
@@ -209,7 +209,7 @@ export default function App() {
         fecha: form.date ?? "",
         hora: form.time ?? "",
         total: `$${currentPrice} MXN`,
-        notas: form.recurring ? `${form.notes || ""} (Recurrente: cada ${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][new Date(form.date! + "T00:00:00").getDay()]} a las ${form.time})` : form.notes || "Sin notas",
+        notas: form.recurring ? `${form.notes || ""} (Recurrente indefinidamente: cada ${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][new Date(form.date! + "T00:00:00").getDay()]} a las ${form.time})` : form.notes || "Sin notas",
       });
       
       await sendTelegram(
@@ -223,7 +223,7 @@ export default function App() {
 📅 <b>Fecha Inicial:</b> ${form.date}
 ⏰ <b>Hora:</b> ${form.time}
 💰 <b>Total:</b> $${currentPrice} MXN
-${form.recurring ? `📌 <b>Frecuencia:</b> Cada ${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][new Date(form.date! + "T00:00:00").getDay()]} por 3 meses` : ""}
+${form.recurring ? `📌 <b>Frecuencia:</b> Cada ${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][new Date(form.date! + "T00:00:00").getDay()]} indefinidamente` : ""}
 📝 <b>Notas:</b> ${form.notes || "Sin notas"}`
       );
       setSubmitted(true);
@@ -389,7 +389,7 @@ ${form.recurring ? `📌 <b>Frecuencia:</b> Cada ${["domingo","lunes","martes","
                     onChange={e => setForm(f => ({...f, recurring: e.target.checked}))}
                     style={{marginRight:8, width:18, height:18, cursor:"pointer"}}
                   />
-                  <span>🔄 Agendar todos los {["domingos","lunes","martes","miércoles","jueves","viernes","sábados"][new Date(form.date + "T00:00:00").getDay()]} a las {form.time} durante 3 meses</span>
+                  <span>🔄 Agendar todos los {["domingos","lunes","martes","miércoles","jueves","viernes","sábados"][new Date(form.date + "T00:00:00").getDay()]} a las {form.time} indefinidamente</span>
                 </label>
                 <p style={s.recurringHint}>Si no marcas, solo se agendará esta fecha</p>
               </div>
